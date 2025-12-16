@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import PaymentModal from '../components/PaymentModal';
 import { FiTrash2, FiMinus, FiPlus, FiShoppingBag } from 'react-icons/fi';
 
 export default function Cart() {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -167,6 +170,43 @@ export default function Cart() {
     return cart.items.reduce((total, item) => total + item.quantity, 0);
   };
 
+  const handleProceedToCheckout = () => {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      alert('Please log in to proceed with checkout');
+      navigate('/login');
+      return;
+    }
+
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentSubmit = async (paymentData) => {
+    setIsCheckingOut(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        'http://localhost:5000/api/orders/checkout',
+        {},
+        {
+          headers: { 'x-auth-token': token }
+        }
+      );
+
+      if (response.data.success) {
+        setIsPaymentModalOpen(false);
+        alert('Order placed successfully! Check your email for confirmation.');
+        setCart({ items: [] });
+        navigate('/');
+      }
+    } catch (error) {
+      alert(error.response?.data?.message || 'Checkout failed. Please try again.');
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -292,8 +332,12 @@ export default function Cart() {
                   </div>
                 )}
 
-                <button className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition mb-3">
-                  Proceed to Checkout
+                <button 
+                  onClick={handleProceedToCheckout}
+                  disabled={isCheckingOut}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition mb-3 disabled:opacity-50"
+                >
+                  {isCheckingOut ? 'Processing...' : 'Proceed to Checkout'}
                 </button>
 
                 <Link
@@ -307,6 +351,14 @@ export default function Cart() {
           </div>
         )}
       </div>
+
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onSubmit={handlePaymentSubmit}
+        isLoading={isCheckingOut}
+        totalAmount={calculateTotal()}
+      />
 
       <Footer />
     </div>

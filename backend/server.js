@@ -17,11 +17,13 @@ mongoose
 const productRoutes = require("./routes/products");
 const authRoutes = require("./routes/auth");
 const cartRoutes = require("./routes/cart");
+const orderRoutes = require("./routes/orders");
 
 // Register routes
 app.use("/api/products", productRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/orders", orderRoutes);
 
 app.get("/", (req, res) => {
   res.send("API is running");
