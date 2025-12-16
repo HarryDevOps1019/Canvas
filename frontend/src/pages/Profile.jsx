@@ -1,41 +1,30 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import { FiUser, FiMail, FiLock, FiCamera, FiTrash2, FiArrowLeft } from 'react-icons/fi';
 
-const Profile = () => {
+export default function Profile() {
   const [user, setUser] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    profileImage: ''
-  });
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [profileData, setProfileData] = useState({ name: '', profileImage: '' });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  const [deletePassword, setDeletePassword] = useState('');
-  const [activeTab, setActiveTab] = useState('profile');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [updating, setUpdating] = useState(false);
   const navigate = useNavigate();
-  const fileInputRef = useRef();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (!token || !storedUser) {
+    if (!token) {
       navigate('/login');
       return;
     }
-    
-    setUser(JSON.parse(storedUser));
-    setFormData({
-      name: JSON.parse(storedUser).name || '',
-      profileImage: JSON.parse(storedUser).profileImage || ''
-    });
-    
     fetchProfile();
   }, []);
 
@@ -45,47 +34,52 @@ const Profile = () => {
       const res = await axios.get('http://localhost:5000/api/auth/profile', {
         headers: { 'x-auth-token': token }
       });
-      
       setUser(res.data);
-      localStorage.setItem('user', JSON.stringify(res.data));
-    } catch (err) {
-      console.error('Failed to fetch profile');
+      setProfileData({ name: res.data.name, profileImage: res.data.profileImage || '' });
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      navigate('/login');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'Image size must be less than 2MB' });
+        return;
+      }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData({
-        ...formData,
-        profileImage: reader.result
-      });
-    };
-    reader.readAsDataURL(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileData({ ...profileData, profileImage: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const updateProfile = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-    setSuccess('');
+    setUpdating(true);
+    setMessage({ type: '', text: '' });
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.put('http://localhost:5000/api/auth/profile', formData, {
-        headers: { 'x-auth-token': token }
-      });
+      const res = await axios.put(
+        'http://localhost:5000/api/auth/profile',
+        profileData,
+        { headers: { 'x-auth-token': token } }
+      );
 
       setUser(res.data);
       localStorage.setItem('user', JSON.stringify(res.data));
-      setSuccess('Profile updated successfully');
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Update failed');
+      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.msg || 'Failed to update profile' });
     } finally {
-      setLoading(false);
+      setUpdating(false);
     }
   };
 
@@ -93,43 +87,42 @@ const Profile = () => {
     e.preventDefault();
     
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('New passwords do not match');
+      setMessage({ type: 'error', text: 'Passwords do not match' });
       return;
     }
 
-    setLoading(true);
-    setError('');
-    setSuccess('');
+    if (passwordData.newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    setUpdating(true);
+    setMessage({ type: '', text: '' });
 
     try {
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5000/api/auth/change-password', {
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword
-      }, {
-        headers: { 'x-auth-token': token }
-      });
+      await axios.post(
+        'http://localhost:5000/api/auth/change-password',
+        {
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword
+        },
+        { headers: { 'x-auth-token': token } }
+      );
 
-      setSuccess('Password changed successfully');
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      });
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Password change failed');
+      setMessage({ type: 'success', text: 'Password changed successfully!' });
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.msg || 'Failed to change password' });
     } finally {
-      setLoading(false);
+      setUpdating(false);
     }
   };
 
   const deleteAccount = async () => {
-    if (!window.confirm('Are you sure? This cannot be undone!')) {
+    if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
       return;
     }
-
-    setLoading(true);
-    setError('');
 
     try {
       const token = localStorage.getItem('token');
@@ -140,257 +133,215 @@ const Profile = () => {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       navigate('/');
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to delete account');
-      setLoading(false);
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to delete account' });
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
-
-  if (!user) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+        <Footer />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      {/* Back to Home Button - Added at top */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <Link 
-          to="/" 
-          className="inline-flex items-center text-indigo-600 hover:text-indigo-800 transition"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Home
-        </Link>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <Header />
 
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-8 text-white">
-            <div className="flex flex-col md:flex-row items-center justify-between">
-              <div className="flex items-center space-x-4 mb-6 md:mb-0">
-                <div className="relative">
-                  <img
-                    src={formData.profileImage || 'https://via.placeholder.com/150'}
-                    alt="Profile"
-                    className="w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="absolute bottom-0 right-0 bg-white text-indigo-600 p-2 rounded-full hover:bg-gray-100 transition"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    accept="image/*"
-                    className="hidden"
-                  />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">{user.name}</h1>
-                  <p className="text-indigo-100">{user.email}</p>
-                </div>
-              </div>
-              <div className="flex space-x-3">
-                <Link
-                  to="/"
-                  className="bg-white/20 backdrop-blur-sm text-white px-6 py-2 rounded-lg font-semibold hover:bg-white/30 transition border border-white/30"
-                >
-                  Home
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-white text-indigo-600 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* Back to Home Button */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 transition font-medium"
+          >
+            <FiArrowLeft className="w-5 h-5" />
+            Back to Home
+          </button>
+        </div>
+
+        <h1 className="text-3xl font-bold text-gray-800 mb-8">My Profile</h1>
+
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow-md mb-6">
+          <div className="flex border-b">
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`flex-1 py-4 px-6 text-center font-medium transition ${
+                activeTab === 'profile'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-blue-600'
+              }`}
+            >
+              <FiUser className="inline mr-2" />
+              Profile
+            </button>
+            <button
+              onClick={() => setActiveTab('security')}
+              className={`flex-1 py-4 px-6 text-center font-medium transition ${
+                activeTab === 'security'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-blue-600'
+              }`}
+            >
+              <FiLock className="inline mr-2" />
+              Security
+            </button>
           </div>
 
-          {/* Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="flex">
-              <button
-                onClick={() => setActiveTab('profile')}
-                className={`flex-1 py-4 px-6 text-center font-medium ${activeTab === 'profile' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+          <div className="p-6">
+            {message.text && (
+              <div
+                className={`mb-6 p-4 rounded-lg ${
+                  message.type === 'success'
+                    ? 'bg-green-50 border-l-4 border-green-500 text-green-700'
+                    : 'bg-red-50 border-l-4 border-red-500 text-red-700'
+                }`}
               >
-                Profile
-              </button>
-              <button
-                onClick={() => setActiveTab('password')}
-                className={`flex-1 py-4 px-6 text-center font-medium ${activeTab === 'password' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Change Password
-              </button>
-              <button
-                onClick={() => setActiveTab('delete')}
-                className={`flex-1 py-4 px-6 text-center font-medium ${activeTab === 'delete' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                Delete Account
-              </button>
-            </nav>
-          </div>
-
-          {/* Content */}
-          <div className="p-8">
-            {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-            )}
-
-            {success && (
-              <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
-                <p className="text-sm text-green-700">{success}</p>
+                {message.text}
               </div>
             )}
 
             {/* Profile Tab */}
             {activeTab === 'profile' && (
-              <form onSubmit={updateProfile} className="max-w-md mx-auto space-y-6">
-                <div>
+              <form onSubmit={updateProfile}>
+                <div className="flex flex-col items-center mb-6">
+                  <div className="relative">
+                    {profileData.profileImage ? (
+                      <img
+                        src={profileData.profileImage}
+                        alt="Profile"
+                        className="w-32 h-32 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center">
+                        <FiUser size={48} className="text-gray-400" />
+                      </div>
+                    )}
+                    <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 transition">
+                      <FiCamera />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">Click camera icon to change photo</p>
+                </div>
+
+                <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name
+                    Full Name
                   </label>
                   <input
                     type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    placeholder="Enter your name"
+                    value={profileData.name}
+                    onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   />
                 </div>
 
-                <div>
+                <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
+                    Email Address
                   </label>
-                  <input
-                    type="email"
-                    value={user.email}
-                    disabled
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-sm text-gray-500 mt-2">Email cannot be changed</p>
+                  <div className="flex items-center px-4 py-3 border border-gray-300 rounded-lg bg-gray-50">
+                    <FiMail className="text-gray-400 mr-2" />
+                    <span className="text-gray-700">{user.email}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
                 </div>
 
-                <div className="flex space-x-4 pt-4">
-                  <Link
-                    to="/"
-                    className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition text-center"
-                  >
-                    Back to Home
-                  </Link>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={updating}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updating ? 'Updating...' : 'Update Profile'}
+                </button>
               </form>
             )}
 
-            {/* Change Password Tab */}
-            {activeTab === 'password' && (
-              <form onSubmit={changePassword} className="max-w-md mx-auto space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Current Password
-                  </label>
-                  <input
-                    type="password"
-                    value={passwordData.currentPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    placeholder="Enter current password"
-                  />
-                </div>
+            {/* Security Tab */}
+            {activeTab === 'security' && (
+              <div>
+                <form onSubmit={changePassword} className="mb-8">
+                  <h3 className="text-lg font-semibold mb-4">Change Password</h3>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    placeholder="Enter new password"
-                  />
-                </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.currentPassword}
+                      onChange={(e) =>
+                        setPasswordData({ ...passwordData, currentPassword: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Confirm New Password
-                  </label>
-                  <input
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-                    placeholder="Confirm new password"
-                  />
-                </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) =>
+                        setPasswordData({ ...passwordData, newPassword: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
 
-                <div className="flex space-x-4 pt-4">
-                  <Link
-                    to="/"
-                    className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition text-center"
-                  >
-                    Back to Home
-                  </Link>
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) =>
+                        setPasswordData({ ...passwordData, confirmPassword: e.target.value })
+                      }
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    />
+                  </div>
+
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-indigo-700 hover:to-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={updating}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? 'Changing...' : 'Change Password'}
+                    {updating ? 'Changing...' : 'Change Password'}
                   </button>
-                </div>
-              </form>
-            )}
+                </form>
 
-            {/* Delete Account Tab */}
-            {activeTab === 'delete' && (
-              <div className="max-w-md mx-auto">
-                <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-lg mb-6">
-                  <h3 className="text-lg font-semibold text-red-800 mb-2">Delete Account</h3>
-                  <p className="text-red-700">
-                    Once you delete your account, all your data will be permanently removed.
-                    This action cannot be undone.
+                <div className="border-t pt-8">
+                  <h3 className="text-lg font-semibold text-red-600 mb-4">Danger Zone</h3>
+                  <p className="text-gray-600 mb-4">
+                    Once you delete your account, there is no going back. Please be certain.
                   </p>
-                </div>
-
-                <div className="flex space-x-4">
-                  <Link
-                    to="/"
-                    className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-300 transition text-center"
-                  >
-                    Back to Home
-                  </Link>
                   <button
                     onClick={deleteAccount}
-                    disabled={loading}
-                    className="flex-1 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
                   >
-                    {loading ? 'Deleting...' : 'Delete My Account'}
+                    <FiTrash2 />
+                    Delete Account
                   </button>
                 </div>
               </div>
@@ -398,8 +349,8 @@ const Profile = () => {
           </div>
         </div>
       </div>
+
+      <Footer />
     </div>
   );
-};
-
-export default Profile;
+}

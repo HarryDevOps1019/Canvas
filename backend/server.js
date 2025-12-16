@@ -5,7 +5,7 @@ require("dotenv").config();
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // For base64 images
+app.use(express.json({ limit: '10mb' }));
 
 // Connect to MongoDB
 mongoose
@@ -16,10 +16,12 @@ mongoose
 // Import routes
 const productRoutes = require("./routes/products");
 const authRoutes = require("./routes/auth");
+const cartRoutes = require("./routes/cart");
 
 // Register routes
 app.use("/api/products", productRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/cart", cartRoutes);
 
 app.get("/", (req, res) => {
   res.send("API is running");
