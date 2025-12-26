@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 
-require('dotenv').config();
+require('dotenv').config({ path: './backend/.env' });
 
 const products = [
   // Men's Clothing (7 products)
@@ -280,7 +280,7 @@ const products = [
 const seedProducts = async () => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGO_URI);
     console.log('Connected to MongoDB');
 
     // Clear existing products

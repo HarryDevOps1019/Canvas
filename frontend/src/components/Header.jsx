@@ -49,7 +49,7 @@ export default function Header() {
         setCartCount(total);
         return;
       }
-      const res = await axios.get("http://localhost:5000/api/cart", {
+      const res = await axios.get("http://host.docker.internal:5000/api/cart", {
         headers: { "x-auth-token": token },
       });
       setCartCount(res.data.totalItems || 0);
