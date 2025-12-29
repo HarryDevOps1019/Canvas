@@ -1,0 +1,85 @@
+# =======================
+# Backend Deployment
+# =======================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canvas-backend-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: canvas-backend
+  template:
+    metadata:
+      labels:
+        app: canvas-backend
+    spec:
+      containers:
+        - name: backend
+          image: harry1019/canvasserver:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          envFrom:
+            - configMapRef:
+                name: canvas-backend-config
+
+---
+# =======================
+# Backend Service
+# =======================
+apiVersion: v1
+kind: Service
+metadata:
+  name: canvas-backend-service
+spec:
+  selector:
+    app: canvas-backend
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+
+---
+# =======================
+# Frontend Deployment
+# =======================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: canvas-frontend-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: canvas-frontend
+  template:
+    metadata:
+      labels:
+        app: canvas-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: harry1019/canvaswebsite:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+
+---
+# =======================
+# Frontend Service
+# =======================
+apiVersion: v1
+kind: Service
+metadata:
+  name: canvas-frontend-service
+spec:
+  selector:
+    app: canvas-frontend
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 80
+  type: NodePort
